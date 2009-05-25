@@ -31,6 +31,7 @@ t/08_threads.t
 t/09_list.t
 t/10_list_nested.t
 t/11_expr_val_list.t
+t/12_swap.t
 t/99_leaktrace.t
 xt/01_podspell.t
 xt/02_pod.t

@@ -1,6 +1,11 @@
 Revision history for Perl extension Scalar::Alias
 
-0.03
+0.04 Tue May 26 08:06:54 2009
+	- fix an issue about list alias with common vars (OPpASSIGN_COMMON)
+	- add an exception about "our alias $foo"
+	- fix the name in META.yml and README
+
+0.03 Mon May 25 13:21:33 2009
 	- implement list alias syntax:
 		- my alias($x, $y) = @_
 		- (my $x, my alias $y) = @_

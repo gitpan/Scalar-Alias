@@ -15,7 +15,7 @@ license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
-name: Lexical-Alias
+name: Scalar-Alias
 no_index:
   directory:
     - example
@@ -26,4 +26,4 @@ requires:
   perl: 5.8.1
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.01
+version: 0.04

@@ -10,6 +10,10 @@
 #define SvPAD_TYPED(sv) (SvFLAGS(sv) & SVpad_TYPED)
 #endif
 
+#ifndef SvPAD_OUR
+#define SvPAD_OUR(sv) (SvFLAGS(sv) & SVpad_OUR)
+#endif
+
 #ifndef gv_stashpvs
 #define gv_stashpvs(s, add) Perl_gv_stashpvn(aTHX_ STR_WITH_LEN(s), add)
 #endif
@@ -150,7 +154,7 @@ S_do_oddball(pTHX_ HV *hash, SV **relem, SV **firstrelem)
             if (SvSMAGICAL(tmpstr))
                 mg_set(tmpstr);
             if (!didstore)
-                sv_2mortal(tmpstr);
+                (void)sv_2mortal(tmpstr);
         }
         TAINT_NOT;
     }
@@ -171,21 +175,56 @@ sa_pp_list_alias(pTHX){
     register SV **lelem;
 
     register SV *sv;
-    register AV *ary = NULL;
+
+    AV *ary  = NULL;
     HV *hash = NULL;
 
-    I32 gimme;
+    I32 const gimme = GIMME_V;
     I32 i;
     int magic;
-    SV **firsthashrelem = NULL;	/* "= 0" keeps gcc 2.95 quiet  */
+    int const common = PL_op->op_private & OPpASSIGN_COMMON;
+
+    PL_delaymagic = DM_DELAY;		/* catch simultaneous items */
+
     /* If there's a common identifier on both sides we have to take
      * special care that assigning the identifier on the left doesn't
      * clobber a value on the right that's used later in the list.
      */
-    int const common = (PL_op->op_private & OPpASSIGN_COMMON);
+    if (common) {
+		/* In special case (includes swapping): */
+		relem = firstrelem;
+		lelem = firstlelem;
+		while (lelem <= lastlelem) {
+			sv = *lelem++;
+			if (relem <= lastrelem) {
+				if(MyAliasDecl(sv)){
+					PADOFFSET const po = SvUVX(sv);
 
-    PL_delaymagic = DM_DELAY;		/* catch simultaneous items */
-    gimme = GIMME_V;
+					assert(po != 0);
+					if(SvTEMP(*relem)){
+						SAVEGENERICSV(PAD_SVl(po));
+
+						SvREFCNT_inc_simple_void_NN(*relem);
+					}
+					else{
+						SAVESPTR(PAD_SVl(po));
+					}
+
+					PAD_SVl(po) = *relem;
+				}
+				relem++;
+			}
+			else{
+				break;
+			}
+		}
+
+
+		EXTEND_MORTAL(lastrelem - firstrelem + 1);
+		for (relem = firstrelem; relem <= lastrelem; relem++) {
+			*relem = sv_mortalcopy(*relem);
+		}
+    }
 
     relem = firstrelem;
     lelem = firstlelem;
@@ -216,7 +255,7 @@ sa_pp_list_alias(pTHX){
 			PL_delaymagic = dmbak;
 		    }
 		    if (!didstore)
-			sv_2mortal(sv);
+			(void)sv_2mortal(sv);
 		}
 		TAINT_NOT;
 	    }
@@ -231,26 +270,24 @@ sa_pp_list_alias(pTHX){
 		hash = (HV*)sv;
 		magic = SvMAGICAL(hash);
 		hv_clear(hash);
-		firsthashrelem = relem;
 
 		while (relem < lastrelem) {	/* gobble up all the rest */
 		    HE *didstore;
 		    sv = *relem ? *relem : &PL_sv_no;
 		    relem++;
 		    tmpstr = newSV(0);
-		    if (*relem)
-			sv_setsv(tmpstr,*relem);	/* value */
+		    sv_setsv(tmpstr,*relem);	/* value */
 		    *(relem++) = tmpstr;
 		    didstore = hv_store_ent(hash,sv,tmpstr,0);
 		    if (magic) {
 			if (SvSMAGICAL(tmpstr)) {
-			    U16 dmbak = PL_delaymagic;
+			    U16 const dmbak = PL_delaymagic;
 			    PL_delaymagic = 0;
 			    mg_set(tmpstr);
 			    PL_delaymagic = dmbak;
 			}
 			if (!didstore)
-			    sv_2mortal(tmpstr);
+			    (void)sv_2mortal(tmpstr);
 		    }
 		    TAINT_NOT;
 		}
@@ -268,22 +305,24 @@ sa_pp_list_alias(pTHX){
 	    }
 	    if (relem <= lastrelem) {
 		if(MyAliasDecl(sv)){
-			PADOFFSET const po = SvUVX(sv);
+			if(!common){
+				PADOFFSET const po = SvUVX(sv);
 
-			assert(po != 0);
-			if(SvTEMP(*relem)){
-				SAVEGENERICSV(PAD_SVl(po));
+				assert(po != 0);
+				if(SvTEMP(*relem)){
+					SAVEGENERICSV(PAD_SVl(po));
 
-				SvREFCNT_inc_simple_void_NN(*relem);
+					SvREFCNT_inc_simple_void_NN(*relem);
+				}
+				else{
+					SAVESPTR(PAD_SVl(po));
+				}
+
+				PAD_SVl(po) = *relem;
 			}
-			else{
-				SAVESPTR(PAD_SVl(po));
-			}
-
-			PAD_SVl(po) = *relem;
 		}
 		else{
-			sv_setsv(sv, common ? sv_mortalcopy(*relem) : *relem);
+			sv_setsv(sv, *relem);
 			*relem = sv;
 		}
 		relem++;
@@ -402,7 +441,7 @@ sa_die(pTHX_ pMY_CXT_ COP* const cop, SV* const name, const char* const msg){
 	ptr_table_free(MY_CXT.seen);
 	MY_CXT.seen = NULL;
 
-	Perl_croak(aTHX_ "Cannot declare my alias %s %s at %s line %d.",
+	Perl_croak(aTHX_ "Cannot declare lexical alias %s %s at %s line %d.",
 		SvPVX_const(name), msg,
 		CopFILE(cop), (int)CopLINE(cop)
 	);
@@ -536,10 +575,28 @@ sa_inject(pTHX_ pMY_CXT_ COP* cop, OP* o){
 			break;
 		}
 
-		/* we concerned with only OP_SASSIGN and OP_PADSV, but should check all the opcode tree */
+		case OP_RV2SV:
+		if(o->op_private & OPpOUR_INTRO){
+			SV** svp         = AvARRAY(PL_comppad_name);
+			SV** const end   = svp + AvFILLp(PL_comppad_name) + 1;
+			GV* const gv     = cGVOPx_gv(cBINOPo->op_first);
+			const char* name = GvNAME(gv);
+
+			while(svp != end){
+				if(SvPAD_OUR(*svp) && MyAliasDecl(*svp)
+					&& strEQ(SvPVX_const(*svp)+1, name)){
+
+					sa_die(aTHX_ aMY_CXT_ cop, *svp, "with our statement");
+				}
+				svp++;
+			}
+		}
+			break;
+
+		/* we concerned with a few opcodes, but should check all the opcode tree */
 		case OP_NEXTSTATE:
 		case OP_DBSTATE:
-			cop = ((COP*)o); /* for context info */
+			cop = cCOPo; /* for context info */
 			break;
 
 		case OP_MAPWHILE:

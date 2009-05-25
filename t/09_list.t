@@ -1,7 +1,7 @@
 #!perl -w
 
 use strict;
-use Test::More tests => 22;
+use Test::More tests => 26;
 
 use Scalar::Alias;
 
@@ -98,3 +98,24 @@ is $k, 24;
 	is $x, 'F';
 	is $s, 'Foo';
 }
+
+{
+	my $x = 10;
+	(my alias $y, my @a) = ($x, 1 .. 10);
+
+	$x++;
+
+	is $y, 11;
+	is_deeply \@a, [1 .. 10];
+}
+
+{
+	my $x = 10;
+	(my alias $y, my %h) = ($x, foo => 10, bar => 20);
+
+	$x++;
+
+	is $y, 11;
+	is_deeply \%h, {foo => 10, bar => 20};
+}
+
