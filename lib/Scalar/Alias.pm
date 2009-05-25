@@ -4,7 +4,7 @@ use 5.008_001;
 use strict;
 #use warnings;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use XSLoader;
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -18,7 +18,7 @@ Scalar::Alias - Perl extention to declare lexical aliases
 
 =head1 VERSION
 
-This document describes Scalar::Alias version 0.02.
+This document describes Scalar::Alias version 0.03.
 
 =head1 SYNOPSIS
 

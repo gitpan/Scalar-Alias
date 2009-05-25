@@ -5,32 +5,42 @@ use Benchmark qw(:all);
 
 use Scalar::Alias;
 
+print "Benchmark: scalar alias vs. scalar assignment\n";
+
 print "For integer\n";
 my @integers = ((42) x 100);
 cmpthese -1 => {
 	alias => sub{
 		for my $i(@integers){
 			my alias $x = $i;
+			my alias $y = $i;
+			my alias $z = $i;
 		}
 	},
 	assign => sub{
 		for my $i(@integers){
 			my $x = $i;
+			my $y = $i;
+			my $z = $i;
 		}
 	},
 };
 
 print "For string\n";
-my @strings = (('foo') x 100);
+my @strings = (('foobar') x 100);
 cmpthese -1 => {
 	alias => sub{
 		for my $i(@strings){
 			my alias $x = $i;
+			my alias $y = $i;
+			my alias $z = $i;
 		}
 	},
 	assign => sub{
 		for my $i(@strings){
 			my $x = $i;
+			my $y = $i;
+			my $z = $i;
 		}
 	},
 };
@@ -41,11 +51,15 @@ cmpthese -1 => {
 	alias => sub{
 		for my $i(@refs){
 			my alias $x = $i;
+			my alias $y = $i;
+			my alias $z = $i;
 		}
 	},
 	assign => sub{
 		for my $i(@refs){
 			my $x = $i;
+			my $y = $i;
+			my $z = $i;
 		}
 	},
 };

@@ -37,14 +37,17 @@ sub inc4{
 }
 
 sub inc5{
-	if(@_){
+	eval q{
 		if(@_){
-			{
-				my alias $x = $_[0];
-				$x++;
-			}
+			eval{
+				{
+					my alias $x = $_[0];
+					my alias $y = $x;
+					$y++;
+				}
+			};
 		}
-	}
+	};
 	return;
 }
 
