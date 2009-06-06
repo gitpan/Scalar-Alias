@@ -1,5 +1,8 @@
 Revision history for Perl extension Scalar::Alias
 
+0.05 Sat Jun  6 08:36:51 2009
+	- internal cleanup
+
 0.04 Tue May 26 08:06:54 2009
 	- fix an issue about list alias with common vars (OPpASSIGN_COMMON)
 	- add an exception about "our alias $foo"

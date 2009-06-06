@@ -36,15 +36,8 @@
 
 #define PACKAGE "Scalar::Alias"
 
-#define MY_CXT_KEY PACKAGE "::_guts" XS_VERSION
-typedef struct{
-	HV* alias_stash;
-
-	peep_t old_peepp;
-
-	PTR_TBL_t* seen;
-} my_cxt_t;
-START_MY_CXT
+#define MY_CXT_VARS HV* alias_stash;
+#include "peephook.h"
 
 
 static OP*
@@ -298,7 +291,7 @@ sa_pp_list_alias(pTHX){
 	    }
 	    break;
 	default:
-	    if(SvIMMORTAL(sv)) {
+	    if(sv == &PL_sv_undef) {
 		if (relem <= lastrelem)
 		    relem++;
 		break;
@@ -474,180 +467,130 @@ sa_check_alias_sassign(pTHX_ pMY_CXT_ const OP* const o){
 }
 
 static void
-sa_inject(pTHX_ pMY_CXT_ COP* cop, OP* o){
+my_peep(pTHX_ pMY_CXT_ COP* const cop, OP* const o){
 	dVAR;
-	COP* const oldcop = cop;
 
-	assert(MY_CXT.seen != NULL);
+	switch(o->op_type){
+	case OP_SASSIGN:
+	if(sa_check_alias_sassign(aTHX_ aMY_CXT_ o)){
+		OP* const rhs = cBINOPo->op_first;
+		OP* const lhs = cBINOPo->op_last;
 
-	for(; o; o = o->op_next){
-		if(ptr_table_fetch(MY_CXT.seen, o)){
-			break;
+		/* change the left-hand side OP to pp_scalar_alias */
+		lhs->op_type   = OP_SCALAR_ALIAS;
+		lhs->op_ppaddr = sa_pp_scalar_alias;
+
+		/* The right-hand side OP can be lvalue */
+		rhs->op_flags |= OPf_MOD;
+
+		if(rhs->op_type == OP_AELEM || rhs->op_type == OP_HELEM){
+			rhs->op_private |= OPpLVAL_DEFER;
 		}
-		ptr_table_store(MY_CXT.seen, o, (void*)TRUE);
 
-		switch(o->op_type){
-		case OP_SASSIGN:
-		if(sa_check_alias_sassign(aTHX_ aMY_CXT_ o)){
-			OP* const rhs = cBINOPo->op_first;
-			OP* const lhs = cBINOPo->op_last;
+		/* change the operator assign to null */
+		op_null(o);
+	}
+		break;
 
-			/* change the left-hand side OP to pp_scalar_alias */
-			lhs->op_type   = OP_SCALAR_ALIAS;
-			lhs->op_ppaddr = sa_pp_scalar_alias;
+	case OP_AASSIGN:{
+		OP* kid         = cBINOPo->op_last; /* lhs */
+		bool list_alias = FALSE;
 
-			/* The right-hand side OP can be lvalue */
-			rhs->op_flags |= OPf_MOD;
+		assert(kid != NULL);
+		kid = kUNOP->op_first;
+		assert(kid != NULL);
+		assert(kid->op_type == OP_PUSHMARK);
 
-			if(rhs->op_type == OP_AELEM || rhs->op_type == OP_HELEM){
-				rhs->op_private |= OPpLVAL_DEFER;
+		for(kid = kid->op_sibling; kid; kid = kid->op_sibling){
+			if(kid->op_type == OP_PADSV
+				&& kid->op_private & OPpLVAL_INTRO){
+
+				SV* const padname = AvARRAY(PL_comppad_name)[kid->op_targ];
+
+				assert(AvFILLp(PL_comppad_name) >= (I32)kid->op_targ);
+
+				if(MyAliasDecl(padname)){
+					kid->op_type   = OP_ALIASED_PADSV;
+					kid->op_ppaddr = sa_pp_aliased_padsv;
+
+					list_alias = TRUE;
+				}
 			}
-
-			/* change the operator assign to null */
-			op_null(o);
 		}
-			break;
 
-		case OP_AASSIGN:{
-			OP* kid         = cBINOPo->op_last; /* lhs */
-			bool list_alias = FALSE;
+		if(list_alias){
+			//warn("prepare list alias at %s line %d.\n", CopFILE(cop), (int)CopLINE(cop));
+			o->op_type   = OP_LIST_ALIAS;
+			o->op_ppaddr = sa_pp_list_alias;
 
+			kid = cBINOPo->op_first; /* rhs */
 			assert(kid != NULL);
 			kid = kUNOP->op_first;
 			assert(kid != NULL);
 			assert(kid->op_type == OP_PUSHMARK);
 
 			for(kid = kid->op_sibling; kid; kid = kid->op_sibling){
-				if(kid->op_type == OP_PADSV
-					&& kid->op_private & OPpLVAL_INTRO){
+				/* The right-hand side OP can be lvalue */
+				kid->op_flags |= OPf_MOD;
 
-					SV* const padname = AvARRAY(PL_comppad_name)[kid->op_targ];
-
-					assert(AvFILLp(PL_comppad_name) >= (I32)kid->op_targ);
-
-					if(MyAliasDecl(padname)){
-						kid->op_type   = OP_ALIASED_PADSV;
-						kid->op_ppaddr = sa_pp_aliased_padsv;
-
-						list_alias = TRUE;
-					}
+				if(kid->op_type == OP_AELEM || kid->op_type == OP_HELEM){
+					kid->op_private |= OPpLVAL_DEFER;
 				}
 			}
-
-			if(list_alias){
-				//warn("prepare list alias at %s line %d.\n", CopFILE(cop), (int)CopLINE(cop));
-				o->op_type   = OP_LIST_ALIAS;
-				o->op_ppaddr = sa_pp_list_alias;
-
-				kid = cBINOPo->op_first; /* rhs */
-				assert(kid != NULL);
-				kid = kUNOP->op_first;
-				assert(kid != NULL);
-				assert(kid->op_type == OP_PUSHMARK);
-
-				for(kid = kid->op_sibling; kid; kid = kid->op_sibling){
-					/* The right-hand side OP can be lvalue */
-					kid->op_flags |= OPf_MOD;
-
-					if(kid->op_type == OP_AELEM || kid->op_type == OP_HELEM){
-						kid->op_private |= OPpLVAL_DEFER;
-					}
-				}
-			}
-		}
-			break;
-
-		case OP_PADSV:{
-			SV* const padname = AvARRAY(PL_comppad_name)[o->op_targ];
-
-			if(MyAliasDecl(padname) /* my alias $foo */
-				&& o->op_private & OPpLVAL_INTRO){
-
-				if(o->op_private & OPpDEREF){
-					sa_die(aTHX_ aMY_CXT_ cop, padname, "with dereference");
-					return;
-				}
-
-				if(!(o->op_flags & OPf_REF)){
-					sa_die(aTHX_ aMY_CXT_ cop, padname, "without assignment");
-				}
-			}
-			break;
-		}
-
-		case OP_RV2SV:
-		if(o->op_private & OPpOUR_INTRO){
-			SV** svp         = AvARRAY(PL_comppad_name);
-			SV** const end   = svp + AvFILLp(PL_comppad_name) + 1;
-			GV* const gv     = cGVOPx_gv(cBINOPo->op_first);
-			const char* name = GvNAME(gv);
-
-			while(svp != end){
-				if(SvPAD_OUR(*svp) && MyAliasDecl(*svp)
-					&& strEQ(SvPVX_const(*svp)+1, name)){
-
-					sa_die(aTHX_ aMY_CXT_ cop, *svp, "with our statement");
-				}
-				svp++;
-			}
-		}
-			break;
-
-		/* we concerned with a few opcodes, but should check all the opcode tree */
-		case OP_NEXTSTATE:
-		case OP_DBSTATE:
-			cop = cCOPo; /* for context info */
-			break;
-
-		case OP_MAPWHILE:
-		case OP_GREPWHILE:
-		case OP_AND:
-		case OP_OR:
-#ifdef pp_dor
-		case OP_DOR:
-#endif
-		case OP_ANDASSIGN:
-		case OP_ORASSIGN:
-#ifdef pp_dorassign
-		case OP_DORASSIGN:
-#endif
-		case OP_COND_EXPR:
-		case OP_RANGE:
-#ifdef pp_once
-		case OP_ONCE:
-#endif
-			sa_inject(aTHX_ aMY_CXT_ cop, cLOGOPo->op_other);
-			break;
-		case OP_ENTERLOOP:
-		case OP_ENTERITER:
-			sa_inject(aTHX_ aMY_CXT_ cop, cLOOPo->op_redoop);
-			sa_inject(aTHX_ aMY_CXT_ cop, cLOOPo->op_nextop);
-			sa_inject(aTHX_ aMY_CXT_ cop, cLOOPo->op_lastop);
-			break;
-		case OP_SUBST:
-#if PERL_BCDVERSION >= 0x5010000
-			sa_inject(aTHX_ aMY_CXT_ cop, cPMOPo->op_pmstashstartu.op_pmreplstart);
-#else
-			sa_inject(aTHX_ aMY_CXT_ cop, cPMOPo->op_pmreplstart);
-#endif
-			break;
-
-		default:
-			NOOP;
 		}
 	}
+		break;
 
-	cop = oldcop;
+	case OP_PADSV:{
+		SV* const padname = AvARRAY(PL_comppad_name)[o->op_targ];
+
+		if(MyAliasDecl(padname) /* my alias $foo */
+			&& o->op_private & OPpLVAL_INTRO){
+
+			if(o->op_private & OPpDEREF){
+				sa_die(aTHX_ aMY_CXT_ cop, padname, "with dereference");
+				return;
+			}
+
+			if(!(o->op_flags & OPf_REF)){
+				sa_die(aTHX_ aMY_CXT_ cop, padname, "without assignment");
+			}
+		}
+		break;
+	}
+
+	case OP_RV2SV:
+	if(o->op_private & OPpOUR_INTRO){
+		SV** svp         = AvARRAY(PL_comppad_name);
+		SV** const end   = svp + AvFILLp(PL_comppad_name) + 1;
+		GV* const gv     = cGVOPx_gv(cBINOPo->op_first);
+		const char* name = GvNAME(gv);
+
+		while(svp != end){
+			if(SvPAD_OUR(*svp) && MyAliasDecl(*svp)
+				&& strEQ(SvPVX_const(*svp)+1, name)){
+
+				sa_die(aTHX_ aMY_CXT_ cop, *svp, "with our statement");
+			}
+			svp++;
+		}
+	}
+		break;
+	default:
+		NOOP;
+	}
 }
 
 static int
-sa_enabled(pTHX){
+my_peep_enabled(pTHX_ pMY_CXT_ OP* const o){
 	dVAR;
-	SV** svp = AvARRAY(PL_comppad_name);
-	SV** end = svp + AvFILLp(PL_comppad_name) + 1;
+	SV**       svp = AvARRAY(PL_comppad_name);
+	SV** const end = svp + AvFILLp(PL_comppad_name) + 1;
+
+	PERL_UNUSED_VAR(o);
 
 	while(svp != end){
-		if(SvPAD_TYPED(*svp)){
+		if(MyAliasDecl(*svp)){
 			return TRUE;
 		}
 
@@ -656,27 +599,6 @@ sa_enabled(pTHX){
 
 	return FALSE;
 }
-
-static void
-sa_peep(pTHX_ OP* const o){
-	dVAR;
-	dMY_CXT;
-
-	assert(o);
-
-	if(sa_enabled(aTHX)){
-		assert(MY_CXT.seen == NULL);
-		MY_CXT.seen = ptr_table_new();
-
-		sa_inject(aTHX_ aMY_CXT_ PL_curcop, o);
-
-		ptr_table_free(MY_CXT.seen);
-		MY_CXT.seen = NULL;
-	}
-
-	MY_CXT.old_peepp(aTHX_ o);
-}
-
 
 static void
 sa_setup_opnames(pTHX){
@@ -714,13 +636,10 @@ PROTOTYPES: DISABLE
 BOOT:
 {
 	MY_CXT_INIT;
-
 	MY_CXT.alias_stash   = gv_stashpvs("alias", GV_ADD);
-
-	MY_CXT.old_peepp     = PL_peepp;
-	PL_peepp             = sa_peep;
-
 	sa_setup_opnames(aTHX);
+
+	PEEPHOOK_REGISTER();
 }
 
 

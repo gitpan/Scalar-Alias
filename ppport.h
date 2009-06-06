@@ -4,7 +4,7 @@
 /*
 ----------------------------------------------------------------------
 
-    ppport.h -- Perl/Pollution/Portability Version 3.16
+    ppport.h -- Perl/Pollution/Portability Version 3.17
 
     Automatically created by Devel::PPPort running under perl 5.010000.
 
@@ -23,8 +23,8 @@ SKIP
 if (@ARGV && $ARGV[0] eq '--unstrip') {
   eval { require Devel::PPPort };
   $@ and die "Cannot require Devel::PPPort, please install.\n";
-  if (eval $Devel::PPPort::VERSION < 3.16) {
-    die "ppport.h was originally generated with Devel::PPPort 3.16.\n"
+  if (eval $Devel::PPPort::VERSION < 3.17) {
+    die "ppport.h was originally generated with Devel::PPPort 3.17.\n"
       . "Your Devel::PPPort is only version $Devel::PPPort::VERSION.\n"
       . "Please install a newer version, or --unstrip will not work.\n";
   }
@@ -545,15 +545,28 @@ typedef NVTYPE NV;
 #endif
 #define INT2PTR(any,d) (any)(PTRV)(d)
 #endif
-#define NUM2PTR(any,d) (any)(PTRV)(d)
-#define PTR2IV(p) INT2PTR(IV,p)
-#define PTR2UV(p) INT2PTR(UV,p)
-#define PTR2NV(p) NUM2PTR(NV,p)
+#endif
+#ifndef PTR2ul
 #if PTRSIZE == LONGSIZE
 #define PTR2ul(p) (unsigned long)(p)
 #else
 #define PTR2ul(p) INT2PTR(unsigned long,p)
 #endif
+#endif
+#ifndef PTR2nat
+#define PTR2nat(p) (PTRV)(p)
+#endif
+#ifndef NUM2PTR
+#define NUM2PTR(any,d) (any)PTR2nat(d)
+#endif
+#ifndef PTR2IV
+#define PTR2IV(p) INT2PTR(IV,p)
+#endif
+#ifndef PTR2UV
+#define PTR2UV(p) INT2PTR(UV,p)
+#endif
+#ifndef PTR2NV
+#define PTR2NV(p) NUM2PTR(NV,p)
 #endif
 #undef START_EXTERN_C
 #undef END_EXTERN_C

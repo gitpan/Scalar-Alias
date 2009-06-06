@@ -1,5 +1,5 @@
 ---
-abstract: 'Perl extention to declare lexical aliases'
+abstract: 'Perl extention to declare lexical scalar aliases'
 author:
   - 'Goro Fuji (gfx) <gfuji(at)cpan.org>.'
 build_requires:
@@ -26,4 +26,4 @@ requires:
   perl: 5.8.1
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.04
+version: 0.05
