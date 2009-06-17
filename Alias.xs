@@ -14,10 +14,6 @@
 #define SvPAD_OUR(sv) (SvFLAGS(sv) & SVpad_OUR)
 #endif
 
-#ifndef gv_stashpvs
-#define gv_stashpvs(s, add) Perl_gv_stashpvn(aTHX_ STR_WITH_LEN(s), add)
-#endif
-
 #ifdef DEBUGGING
 #define NO_OP_CUSTOM
 #endif
@@ -582,12 +578,12 @@ my_peep(pTHX_ pMY_CXT_ COP* const cop, OP* const o){
 }
 
 static int
-my_peep_enabled(pTHX_ pMY_CXT_ OP* const o){
+my_peep_enabled(pTHX_ pMY_CXT_ OP* o){
 	dVAR;
 	SV**       svp = AvARRAY(PL_comppad_name);
 	SV** const end = svp + AvFILLp(PL_comppad_name) + 1;
 
-	PERL_UNUSED_VAR(o);
+	PERL_UNUSED_ARG(o);
 
 	while(svp != end){
 		if(MyAliasDecl(*svp)){

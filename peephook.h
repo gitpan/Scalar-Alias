@@ -1,7 +1,7 @@
 /*
 	peephook.h - Helper header file to hook the peephole optimizer (PL_peepp)
 
-	VERSION 0.01
+	VERSION 0.02
 
 	requires:
 		MY_CXT_VARS
@@ -31,9 +31,9 @@ START_MY_CXT
 		peep_t old_peepp; \
 		PTR_TBL_t* seen;  \
 
-static void my_peep(pTHX_ pMY_CXT_ COP* cop, OP* o);
+static void my_peep(pTHX_ pMY_CXT_ COP* cop PERL_UNUSED_DECL, OP* o PERL_UNUSED_DECL);
 
-static int  my_peep_enabled(pTHX_ pMY_CXT_ OP* o);
+static int  my_peep_enabled(pTHX_ pMY_CXT_ OP* o PERL_UNUSED_DECL);
 
 static void
 xs_peephook_dispatcher(pTHX_ pMY_CXT_ COP* cop, OP* o){
@@ -117,8 +117,8 @@ xs_peephook_peep(pTHX_ OP* const o){
 	MY_CXT.old_peepp(aTHX_ o);
 }
 
-#define PEEPHOOK_REGISTER() STMT_START {           \
-		MY_CXT.old_peepp = PL_peepp;   \
+#define PEEPHOOK_REGISTER() STMT_START {     \
+		MY_CXT.old_peepp = PL_peepp; \
 		PL_peepp = xs_peephook_peep; \
 	} STMT_END
 

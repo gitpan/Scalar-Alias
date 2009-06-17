@@ -1,5 +1,10 @@
 Revision history for Perl extension Scalar::Alias
 
+
+0.06 Mon Jun 15 22:48:11 2009
+	- update ppport.h to 3.19
+	- use PERL_UNUSED_ARG instead of PERL_UNUSED_VAR
+
 0.05 Sat Jun  6 08:36:51 2009
 	- internal cleanup
 
